@@ -27,6 +27,10 @@ body {
     position: relative;
 }
 
+#cat-image, .food-item {
+    user-select: none;
+}
+
 #cat-image {
     max-width: 400px;
     max-height: 400px;

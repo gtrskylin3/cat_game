@@ -577,9 +577,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const catImage = document.getElementById('cat-image');
     const foodSlots = document.getElementById('food-slots');
     const scoreDisplay = document.getElementById('score');
+    const satisfiedCatsDisplay = document.getElementById('satisfied-cats');
     const catContainer = document.getElementById('cat-container');
 
+    const healthSound = new Audio('assets/sounds/health_plus.mp3');
+    const happyCatSound = new Audio('assets/sounds/cat_was_happy.mp3');
+
     let score = 0;
+    let satisfiedCats = 0;
     let draggedFood = null;
 
     const getRandomFood = () => foodImagePaths[Math.floor(Math.random() * foodImagePaths.length)];
@@ -614,10 +619,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showEmotion(randomEmoji);
 
-        if (randomEmoji === '❤️' || randomEmoji === '😻') {
+        if (randomEmoji === '❤️' || randomEmoji === '😻'){
             score++;
             scoreDisplay.textContent = `Удовольствие кота: ${'❤️'.repeat(score)}`;
-        } 
+            healthSound.play();
+        }
         else if (score > 0 && (randomEmoji === '🤢' || randomEmoji === '🤮')) { // ✅ Fixed parentheses
             score--;
             // Simplified logic: just repeat hearts. If score is 0, repeat(0) returns "" (empty string).
@@ -628,24 +634,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 scoreDisplay.textContent = `Удовольствие кота: 0 😿`;
             }
         }
-        // Optional: Handle neutral emojis like '😿' if needed
 
         if (score >= 3) {
-            // 1. Disable interaction temporarily (optional, but recommended)
-            // dropArea.classList.add('disabled'); 
-
-            // 2. Show the "Love" message immediately or after a tiny delay
-            scoreDisplay.textContent = `Котик вас любит! 😻`;
+            satisfiedCats++;
+            satisfiedCatsDisplay.textContent = `Накормлено котиков: ${satisfiedCats}`;
             
-            // 3. Wait 1 second (1000 ms), then reset
             setTimeout(() => {
-                score = 0;
-                scoreDisplay.textContent = `Удовольствие кота: ${'❤️'.repeat(score)}`; // Will show empty string or handle 0 case
-                getNewCat();
-                
-                // Re-enable interaction if you disabled it
-                // dropArea.classList.remove('disabled');
-            }, 1000);
+                scoreDisplay.textContent = `Котик вас любит! 😻`;
+            }, 5000);
+            score = 0;
+            scoreDisplay.textContent = `Удовольствие кота: 0`;
+            happyCatSound.play();
+            getNewCat();
         }
 
         // Replace the used food
