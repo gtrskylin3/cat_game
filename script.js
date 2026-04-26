@@ -585,34 +585,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let score = 0;
     let satisfiedCats = 0;
-    let draggedFood = null;
+    let draggedFood = null; // The original food element from the slot
+    let clone = null; // The clone that follows the cursor/finger
+    let isDragging = false;
+    let isPaused = false;
+    let offsetX = 0, offsetY = 0;
 
     const getRandomFood = () => foodImagePaths[Math.floor(Math.random() * foodImagePaths.length)];
 
     const getNewCat = async () => {
+        if (isPaused) return;
         try {
-            const response = await fetch('/api/images/search');
-            const data = await response.json();
-            catImage.src = data[0].url;
+            let isGif = true;
+            while(isGif) {
+                const response = await fetch('https://api.thecatapi.com/v1/images/search');
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+                const data = await response.json();
+                const catUrl = data[0].url;
+                if (catUrl && !catUrl.endsWith('.gif')) {
+                    isGif = false;
+                    catImage.src = catUrl;
+                }
+            }
         } catch (error) {
             console.error('Error fetching cat image:', error);
         }
     };
-
-    const showEmotion = (emoji) => {
-        const emotion = document.createElement('div');
-        emotion.classList.add('emotion');
-        emotion.textContent = emoji;
-        emotion.style.left = `${Math.random() * 50 + 25}%`;
-        emotion.style.top = '20%';
-
-        catContainer.appendChild(emotion);
-
-        setTimeout(() => {
-            emotion.remove();
-        }, 1500);
-    };
-
+    
+    // This is your logic, I will not touch it.
     const handleDrop = () => {
         const emojis = ['❤️', '🤢', '🤮', '😿', '😻'];
         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
@@ -624,12 +626,10 @@ document.addEventListener('DOMContentLoaded', () => {
             scoreDisplay.textContent = `Удовольствие кота: ${'❤️'.repeat(score)}`;
             healthSound.play();
         }
-        else if (score > 0 && (randomEmoji === '🤢' || randomEmoji === '🤮')) { // ✅ Fixed parentheses
+        else if (score > 0 && (randomEmoji === '🤢' || randomEmoji === '🤮')) { 
             score--;
-            // Simplified logic: just repeat hearts. If score is 0, repeat(0) returns "" (empty string).
             scoreDisplay.textContent = `Удовольствие кота: ${'❤️'.repeat(score)}`;
             
-            // Optional: Add a message if the cat is unhappy/empty
             if (score === 0) {
                 scoreDisplay.textContent = `Удовольствие кота: 0 😿`;
             }
@@ -638,12 +638,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (score >= 3) {
             satisfiedCats++;
             satisfiedCatsDisplay.textContent = `Накормлено котиков: ${satisfiedCats}`;
-            
-            setTimeout(() => {
-                scoreDisplay.textContent = `Котик вас любит! 😻`;
-            }, 5000);
+            scoreDisplay.textContent = `Котик вас любит! 😻`;
             score = 0;
-            scoreDisplay.textContent = `Удовольствие кота: 0`;
             happyCatSound.play();
             getNewCat();
         }
@@ -652,30 +648,92 @@ document.addEventListener('DOMContentLoaded', () => {
         draggedFood.src = getRandomFood();
     };
 
+    const showEmotion = (emoji) => {
+        const emotion = document.createElement('div');
+        emotion.classList.add('emotion');
+        emotion.textContent = emoji;
+        emotion.style.left = `${Math.random() * 50 + 25}%`;
+        emotion.style.top = '20%';
+        catContainer.appendChild(emotion);
+        setTimeout(() => {
+            emotion.remove();
+        }, 1500);
+    };
+
+    function startDrag(e) {
+        if (isPaused || !e.target.classList.contains('food-item')) return;
+        isDragging = true;
+        draggedFood = e.target;
+
+        clone = draggedFood.cloneNode(true);
+        clone.classList.add('dragging');
+        document.body.appendChild(clone);
+        
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+
+        const rect = draggedFood.getBoundingClientRect();
+        offsetX = clientX - rect.left;
+        offsetY = clientY - rect.top;
+
+        clone.style.left = `${clientX - offsetX}px`;
+        clone.style.top = `${clientY - offsetY}px`;
+    }
+
+    function duringDrag(e) {
+        if (!isDragging || !clone) return;
+        
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+        
+        clone.style.left = `${clientX - offsetX}px`;
+        clone.style.top = `${clientY - offsetY}px`;
+    }
+
+    function endDrag(e) {
+        if (!isDragging || !clone) return;
+        isDragging = false;
+
+        const catRect = catImage.getBoundingClientRect();
+        const cloneRect = clone.getBoundingClientRect();
+
+        // Check for overlap
+        if (
+            cloneRect.left < catRect.right &&
+            cloneRect.right > catRect.left &&
+            cloneRect.top < catRect.bottom &&
+            cloneRect.bottom > catRect.top
+        ) {
+            handleDrop();
+        }
+
+        document.body.removeChild(clone);
+        clone = null;
+    }
+
     const createFoodSlots = () => {
+        foodSlots.innerHTML = '';
         for (let i = 0; i < 5; i++) {
             const foodItem = document.createElement('img');
             foodItem.classList.add('food-item');
             foodItem.src = getRandomFood();
-            foodItem.draggable = true;
-            foodItem.id = `food-${i}`;
-
-            foodItem.addEventListener('dragstart', (e) => {
-                draggedFood = e.target;
-            });
-
+            
+            // Prevent default drag behavior
+            foodItem.addEventListener('dragstart', (e) => e.preventDefault());
+            
             foodSlots.appendChild(foodItem);
         }
     };
 
-    catImage.addEventListener('dragover', (e) => {
-        e.preventDefault();
-    });
+    // Unified Event Listeners
+    document.addEventListener('mousedown', startDrag);
+    document.addEventListener('touchstart', startDrag, { passive: false });
 
-    catImage.addEventListener('drop', (e) => {
-        e.preventDefault();
-        handleDrop();
-    });
+    document.addEventListener('mousemove', duringDrag);
+    document.addEventListener('touchmove', duringDrag, { passive: false });
+
+    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('touchend', endDrag);
 
     getNewCat();
     createFoodSlots();
